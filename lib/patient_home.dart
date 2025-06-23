@@ -1,6 +1,7 @@
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'object_detection_screen.dart';
 class PatientHomePage extends StatelessWidget {
   Future<void> fetchData(BuildContext context, String endpoint) async {
     final url = Uri.parse('http://127.0.0.1:5000/$endpoint'); // Use IP if real device
@@ -71,11 +72,14 @@ class PatientHomePage extends StatelessWidget {
                 minimumSize: Size(double.infinity, 60),
                 backgroundColor: Colors.deepPurple.shade100,
               ),
-                onPressed: () {
-                  fetchData(context, 'details'); // Use different endpoint per button
-                },
-
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const ObjectDetectionScreen()),
+                );
+              },
             ),
+
             SizedBox(height: 20),
             ElevatedButton.icon(
               icon: Icon(Icons.mic),

@@ -30,7 +30,7 @@ class RoleSelectorScreen extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 32,
                       fontWeight: FontWeight.bold,
-                      color: Colors.deepPurple.shade700,
+                      color: Colors.white,
                       shadows: [Shadow(blurRadius: 4, color: Colors.white)],
                     ),
                   ),

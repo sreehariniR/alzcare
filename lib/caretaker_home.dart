@@ -3,8 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:audioplayers/audioplayers.dart';
 
-final player = AudioPlayer();
-player.play(UrlSource('http://127.0.0.1:5000/voice'));
+
 
 
 class CaretakerHomePage extends StatelessWidget {

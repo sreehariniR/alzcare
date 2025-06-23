@@ -1,115 +1,139 @@
-import 'dart:math' as math;
+import 'dart:io';                      // For File operations
+import 'dart:convert';                // For decoding JSON response
 import 'package:flutter/material.dart';
-import 'package:camera/camera.dart';
-import 'package:tflite/tflite.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:http/http.dart' as http;
 
 class ObjectDetectionScreen extends StatefulWidget {
+  const ObjectDetectionScreen({Key? key}) : super(key: key); // Proper key constructor
+
   @override
   _ObjectDetectionScreenState createState() => _ObjectDetectionScreenState();
 }
 
 class _ObjectDetectionScreenState extends State<ObjectDetectionScreen> {
-  CameraController? _cameraController;
-  List? _recognitions;
-  bool _isDetecting = false;
-  late List<CameraDescription> _cameras;
+  File? _image;
+  String _result = "";
 
-  @override
-  void initState() {
-    super.initState();
-    loadModel();
-    initCamera();
-  }
-
-  Future<void> loadModel() async {
-    await Tflite.loadModel(
-      model: "assets/ssd_mobilenet.tflite",
-      labels: "assets/labels.txt",
-    );
-  }
-
-  void initCamera() async {
-    _cameras = await availableCameras();
-    _cameraController = CameraController(_cameras[0], ResolutionPreset.medium);
-    await _cameraController!.initialize();
-
-    _cameraController!.startImageStream((CameraImage image) {
-      if (_isDetecting) return;
-      _isDetecting = true;
-
-      Tflite.runModelOnFrame(
-        bytesList: image.planes.map((plane) => plane.bytes).toList(),
-        imageHeight: image.height,
-        imageWidth: image.width,
-        imageMean: 127.5,
-        imageStd: 127.5,
-        rotation: 90,
-        threshold: 0.4,
-        asynch: true,
-      ).then((recognitions) {
-        setState(() {
-          _recognitions = recognitions;
-        });
-        _isDetecting = false;
+  /// Pick an image from the gallery
+  Future<void> pickImage(ImageSource source) async {
+    final picked = await ImagePicker().pickImage(source: source);
+    if (picked != null) {
+      setState(() {
+        _image = File(picked.path);
+        _result = ""; // Reset result when new image is picked
       });
-    });
-
-    setState(() {});
+    }
   }
 
-  @override
-  void dispose() {
-    _cameraController?.dispose();
-    Tflite.close();
-    super.dispose();
-  }
+  /// Send image to backend and get detected objects
+  Future<void> detectObjects() async {
+    if (_image == null) return;
 
-  List<Widget> renderBoxes(Size screen) {
-    if (_recognitions == null) return [];
-    return _recognitions!.map((re) {
-      return Positioned(
-        left: re["rect"]["x"] * screen.width,
-        top: re["rect"]["y"] * screen.height,
-        width: re["rect"]["w"] * screen.width,
-        height: re["rect"]["h"] * screen.height,
-        child: Container(
-          decoration: BoxDecoration(
-            border: Border.all(color: Colors.purple, width: 2),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Align(
-            alignment: Alignment.topLeft,
-            child: Text(
-              "${re["detectedClass"]} ${(re["confidenceInClass"] * 100).toStringAsFixed(0)}%",
-              style: TextStyle(
-                backgroundColor: Colors.white54,
-                color: Colors.deepPurple,
-                fontSize: 14,
-              ),
-            ),
-          ),
-        ),
-      );
-    }).toList();
+    final request = http.MultipartRequest(
+      "POST",
+      Uri.parse("http://192.168.0.102:5000/detect")
+      , // Change IP if testing on a real device
+    );
+
+    request.files.add(await http.MultipartFile.fromPath('image', _image!.path));
+
+    final streamed = await request.send();
+    final response = await http.Response.fromStream(streamed);
+
+    if (response.statusCode == 200) {
+      final decoded = jsonDecode(response.body);
+      setState(() {
+        _result = decoded['objects'].join(', ');
+      });
+    } else {
+      setState(() {
+        _result = "Detection failed: ${response.statusCode}";
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_cameraController == null || !_cameraController!.value.isInitialized) {
-      return Scaffold(
-        appBar: AppBar(title: Text('AI Object Detection')),
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
-
-    final size = MediaQuery.of(context).size;
     return Scaffold(
-      appBar: AppBar(title: Text('AI Object Detection')),
-      body: Stack(
-        children: [
-          CameraPreview(_cameraController!),
-          ...renderBoxes(size),
-        ],
+      appBar: AppBar(
+        title: const Text('Object Detection'),
+        backgroundColor: Colors.deepPurple.shade300,
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          children: [
+            if (_image != null)
+              Container(
+                height: 250,
+                child: Stack(
+                  children: [
+                    Positioned.fill(child: Image.file(_image!, fit: BoxFit.cover)),
+                    if (_result.isNotEmpty)
+                      Positioned(
+                        bottom: 10,
+                        left: 10,
+                        child: Container(
+                          padding: EdgeInsets.all(8),
+                          color: Colors.black.withOpacity(0.6),
+                          child: Text(
+                            'Detected: $_result',
+                            style: TextStyle(color: Colors.white, fontSize: 16),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+
+
+            const SizedBox(height: 20),
+
+            ElevatedButton.icon(
+              icon: Icon(Icons.photo),
+              label: Text("Pick from Gallery"),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.deepPurple.shade100,
+                minimumSize: const Size(double.infinity, 50),
+              ),
+              onPressed: () => pickImage(ImageSource.gallery),
+            ),
+
+            SizedBox(height: 10),
+
+            ElevatedButton.icon(
+              icon: Icon(Icons.camera_alt),
+              label: Text("Take a Photo"),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.deepPurple.shade200,
+                minimumSize: const Size(double.infinity, 50),
+              ),
+              onPressed: () => pickImage(ImageSource.camera),
+            ),
+
+
+            const SizedBox(height: 10),
+
+            ElevatedButton.icon(
+              icon: const Icon(Icons.search),
+              label: const Text("Detect Objects"),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.deepPurple.shade200,
+                minimumSize: const Size(double.infinity, 50),
+              ),
+              onPressed: detectObjects,
+            ),
+
+            const SizedBox(height: 30),
+
+            Text(
+              _result.isNotEmpty ? 'Detected: $_result' : 'No detection yet',
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
     );
   }

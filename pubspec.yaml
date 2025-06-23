@@ -31,6 +31,7 @@ dependencies:
   flutter:
     sdk: flutter
   http: 1.4.0
+  image_picker: ^1.0.7
   audioplayers: ^5.2.0
   camera: ^0.10.5+5
   tflite: ^1.1.2
